@@ -3,7 +3,7 @@ import './style.css';
 
 type GameState = 'ready' | 'playing' | 'paused' | 'over';
 type Lane = -1 | 0 | 1;
-type HazardKind = 'car' | 'truck' | 'barrier' | 'cone' | 'tires' | 'oil';
+type HazardKind = 'car' | 'truck' | 'barrier' | 'cone' | 'tires' | 'oil' | 'sign' | 'crate' | 'pothole';
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const root = $('#game-root');
@@ -176,6 +176,10 @@ const windowMaterials = [
   material('#1c2a35', 0.9)
 ];
 const buildings: THREE.Group[] = [];
+const facadeMaterials = ['#c9c0b1', '#9eaaa9', '#c6a58a', '#777f88', '#d2c9b8'].map(c => material(c, 0.88));
+const trimMaterial = material('#d5d9d7', 0.56, 0.12);
+const storefrontGlass = new THREE.MeshPhysicalMaterial({ color: '#29404b', roughness: 0.18, metalness: 0.12, clearcoat: 0.85, transparent: true, opacity: 0.92 });
+const signMaterials = ['#c65b42', '#477f85', '#d2a34d', '#4e617b'].map(c => material(c, 0.6, 0.12));
 for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
   const g = new THREE.Group();
   const width = 2.4 + Math.random() * 3.2;
@@ -183,7 +187,19 @@ for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
   const depth = 3.4 + Math.random() * 3.2;
   const x = side * (8.7 + width * 0.5 + Math.random() * 3.5);
   const z = -i * 7.5 - Math.random() * 4;
-  box(g, buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)], [0, height / 2 - 0.15, 0], [width, height, depth]);
+  const facade = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)];
+  const facadeStyle = Math.floor(Math.random() * 4);
+  box(g, facade, [0, height / 2 - 0.15, 0], [width, height, depth]);
+  if (height > 7) {
+    box(g, facadeMaterials[Math.floor(Math.random() * facadeMaterials.length)], [0, height + 0.08, 0], [width + 0.16, 0.22, depth + 0.16], false);
+    for (let unit = 0; unit < 1 + Math.floor(Math.random() * 3); unit++) {
+      const ux = (Math.random() - 0.5) * width * 0.62;
+      const uz = (Math.random() - 0.5) * depth * 0.52;
+      box(g, material('#707b80', 0.86), [ux, height + 0.32, uz], [0.5 + Math.random() * 0.45, 0.32, 0.45], false);
+      box(g, trimMaterial, [ux, height + 0.49, uz], [0.53, 0.035, 0.48], false);
+    }
+  }
+  const streetX = -side * (width / 2 + 0.014);
   const cols = Math.max(2, Math.floor(width / 0.65));
   const rows = Math.max(2, Math.floor(height / 0.85));
   for (let row = 1; row < rows; row++) for (let col = 0; col < cols; col++) {
@@ -192,6 +208,30 @@ for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
     const wy = -height / 2 + row * height / rows;
     const wm = windowMaterials[Math.random() > 0.72 ? 1 : Math.random() > 0.22 ? 0 : 2];
     box(g, wm, [wx, wy, depth / 2 + 0.008], [width / cols * 0.42, 0.22, 0.018], false);
+    if (row % 2 === 0 && col % 2 === 0) box(g, trimMaterial, [wx, wy - 0.14, depth / 2 + 0.025], [width / cols * 0.5, 0.035, 0.045], false);
+  }
+  const streetRows = Math.max(2, Math.floor(height / 1.05));
+  for (let row = 1; row < streetRows; row++) for (let col = 0; col < Math.max(2, Math.floor(depth / 0.8)); col++) {
+    if (Math.random() < 0.12) continue;
+    const count = Math.max(2, Math.floor(depth / 0.8));
+    const wz = -depth / 2 + (col + 0.5) * depth / count;
+    const wy = -height / 2 + row * height / streetRows;
+    box(g, windowMaterials[Math.random() > 0.65 ? 1 : Math.random() > 0.2 ? 0 : 2], [streetX, wy, wz], [0.025, 0.24, 0.36], false);
+  }
+  if (facadeStyle === 0 || height < 5.5) {
+    box(g, storefrontGlass, [streetX - side * 0.012, 1.05, 0], [0.045, 1.35, depth * 0.62], false);
+    box(g, signMaterials[Math.floor(Math.random() * signMaterials.length)], [streetX - side * 0.045, 1.92, 0], [0.075, 0.24, depth * 0.72], false);
+    box(g, material('#202b33', 0.5), [streetX - side * 0.055, 0.77, depth * 0.17], [0.08, 1.2, 0.42], false);
+    box(g, trimMaterial, [streetX - side * 0.06, 0.16, 0], [0.08, 0.12, depth * 0.82], false);
+  } else if (facadeStyle === 1) {
+    for (let floor = 1.5; floor < height - 1; floor += 2.2) {
+      box(g, trimMaterial, [streetX - side * 0.12, floor, 0], [0.18, 0.07, depth * 0.78], false);
+      box(g, material('#77858b', 0.48, 0.55), [streetX - side * 0.2, floor + 0.22, 0], [0.035, 0.38, depth * 0.72], false);
+      for (let rail = -1; rail <= 1; rail++) box(g, trimMaterial, [streetX - side * 0.21, floor + 0.2, rail * depth * 0.22], [0.04, 0.32, 0.025], false);
+    }
+  } else if (facadeStyle === 2) {
+    for (let fin = -1; fin <= 1; fin++) box(g, facadeMaterials[2], [streetX - side * 0.06, height * 0.55, fin * depth * 0.28], [0.12, height * 0.78, 0.09], false);
+    box(g, signMaterials[1], [streetX - side * 0.13, 1.7, 0], [0.3, 0.09, depth * 0.84], false);
   }
   g.position.set(x, 0, z);
   g.userData.side = side;
