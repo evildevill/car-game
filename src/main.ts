@@ -395,10 +395,11 @@ function update(dt: number) {
   const targetX = laneX(targetLane);
   lanePosition = THREE.MathUtils.damp(lanePosition, targetX, 8.5, dt);
   player.position.x = currentRoadCenter + lanePosition;
-  player.rotation.y = THREE.MathUtils.clamp(roadCurve(2.8 - distance * 0.95) - roadCurve(0.8 - distance * 0.95), -0.12, 0.12) + THREE.MathUtils.clamp((lanePosition - targetX) * 0.045, -0.12, 0.12);
+  const roadHeading = THREE.MathUtils.clamp(roadCurve(2.8 - distance * 0.95) - roadCurve(0.8 - distance * 0.95), -0.12, 0.12);
+  player.rotation.y = roadHeading + THREE.MathUtils.clamp((lanePosition - targetX) * 0.045, -0.12, 0.12);
   player.position.y = 0.02 + Math.sin(elapsed * 16) * 0.012 * (speed / 120);
   player.rotation.z = THREE.MathUtils.clamp((targetX - lanePosition) * -0.045, -0.12, 0.12);
-  player.rotation.y = THREE.MathUtils.clamp((lanePosition - targetX) * 0.045, -0.12, 0.12);
+  player.rotation.y = roadHeading + THREE.MathUtils.clamp((lanePosition - targetX) * 0.045, -0.12, 0.12);
 
   for (const chunk of roadChunks) {
     chunk.position.z += travel;
