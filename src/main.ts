@@ -3,7 +3,7 @@ import './style.css';
 
 type GameState = 'ready' | 'playing' | 'paused' | 'over';
 type Lane = -1 | 0 | 1;
-type HazardKind = 'car' | 'truck' | 'barrier' | 'cone' | 'tires' | 'oil';
+type HazardKind = 'car' | 'truck' | 'barrier' | 'cone' | 'tires' | 'oil' | 'sign' | 'crate' | 'pothole';
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const root = $('#game-root');
@@ -176,6 +176,10 @@ const windowMaterials = [
   material('#1c2a35', 0.9)
 ];
 const buildings: THREE.Group[] = [];
+const facadeMaterials = ['#c9c0b1', '#9eaaa9', '#c6a58a', '#777f88', '#d2c9b8'].map(c => material(c, 0.88));
+const trimMaterial = material('#d5d9d7', 0.56, 0.12);
+const storefrontGlass = new THREE.MeshPhysicalMaterial({ color: '#29404b', roughness: 0.18, metalness: 0.12, clearcoat: 0.85, transparent: true, opacity: 0.92 });
+const signMaterials = ['#c65b42', '#477f85', '#d2a34d', '#4e617b'].map(c => material(c, 0.6, 0.12));
 for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
   const g = new THREE.Group();
   const width = 2.4 + Math.random() * 3.2;
@@ -183,21 +187,86 @@ for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
   const depth = 3.4 + Math.random() * 3.2;
   const x = side * (8.7 + width * 0.5 + Math.random() * 3.5);
   const z = -i * 7.5 - Math.random() * 4;
-  box(g, buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)], [0, height / 2 - 0.15, 0], [width, height, depth]);
+  const facade = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)];
+  const facadeStyle = Math.floor(Math.random() * 4);
+  box(g, facade, [0, height / 2 - 0.15, 0], [width, height, depth]);
+  if (height > 7) {
+    box(g, facadeMaterials[Math.floor(Math.random() * facadeMaterials.length)], [0, height + 0.08, 0], [width + 0.16, 0.22, depth + 0.16], false);
+    for (let unit = 0; unit < 1 + Math.floor(Math.random() * 3); unit++) {
+      const ux = (Math.random() - 0.5) * width * 0.62;
+      const uz = (Math.random() - 0.5) * depth * 0.52;
+      box(g, material('#707b80', 0.86), [ux, height + 0.32, uz], [0.5 + Math.random() * 0.45, 0.32, 0.45], false);
+      box(g, trimMaterial, [ux, height + 0.49, uz], [0.53, 0.035, 0.48], false);
+    }
+  }
+  const streetX = -side * (width / 2 + 0.014);
   const cols = Math.max(2, Math.floor(width / 0.65));
   const rows = Math.max(2, Math.floor(height / 0.85));
   for (let row = 1; row < rows; row++) for (let col = 0; col < cols; col++) {
     if (Math.random() < 0.16) continue;
     const wx = -width / 2 + (col + 0.5) * width / cols;
-    const wy = -height / 2 + row * height / rows;
+    const wy = row * height / rows - 0.15;
     const wm = windowMaterials[Math.random() > 0.72 ? 1 : Math.random() > 0.22 ? 0 : 2];
     box(g, wm, [wx, wy, depth / 2 + 0.008], [width / cols * 0.42, 0.22, 0.018], false);
+    if (row % 2 === 0 && col % 2 === 0) box(g, trimMaterial, [wx, wy - 0.14, depth / 2 + 0.025], [width / cols * 0.5, 0.035, 0.045], false);
+  }
+  const streetRows = Math.max(2, Math.floor(height / 1.05));
+  for (let row = 1; row < streetRows; row++) for (let col = 0; col < Math.max(2, Math.floor(depth / 0.8)); col++) {
+    if (Math.random() < 0.12) continue;
+    const count = Math.max(2, Math.floor(depth / 0.8));
+    const wz = -depth / 2 + (col + 0.5) * depth / count;
+    const wy = row * height / streetRows - 0.15;
+    box(g, windowMaterials[Math.random() > 0.65 ? 1 : Math.random() > 0.2 ? 0 : 2], [streetX, wy, wz], [0.025, 0.24, 0.36], false);
+  }
+  if (facadeStyle === 0 || height < 5.5) {
+    box(g, storefrontGlass, [streetX - side * 0.012, 1.05, 0], [0.045, 1.35, depth * 0.62], false);
+    box(g, signMaterials[Math.floor(Math.random() * signMaterials.length)], [streetX - side * 0.045, 1.92, 0], [0.075, 0.24, depth * 0.72], false);
+    box(g, material('#202b33', 0.5), [streetX - side * 0.055, 0.77, depth * 0.17], [0.08, 1.2, 0.42], false);
+    box(g, trimMaterial, [streetX - side * 0.06, 0.16, 0], [0.08, 0.12, depth * 0.82], false);
+  } else if (facadeStyle === 1) {
+    for (let floor = 1.5; floor < height - 1; floor += 2.2) {
+      box(g, trimMaterial, [streetX - side * 0.12, floor, 0], [0.18, 0.07, depth * 0.78], false);
+      box(g, material('#77858b', 0.48, 0.55), [streetX - side * 0.2, floor + 0.22, 0], [0.035, 0.38, depth * 0.72], false);
+      for (let rail = -1; rail <= 1; rail++) box(g, trimMaterial, [streetX - side * 0.21, floor + 0.2, rail * depth * 0.22], [0.04, 0.32, 0.025], false);
+    }
+  } else if (facadeStyle === 2) {
+    for (let fin = -1; fin <= 1; fin++) box(g, facadeMaterials[2], [streetX - side * 0.06, height * 0.55, fin * depth * 0.28], [0.12, height * 0.78, 0.09], false);
+    box(g, signMaterials[1], [streetX - side * 0.13, 1.7, 0], [0.3, 0.09, depth * 0.84], false);
   }
   g.position.set(x, 0, z);
   g.userData.side = side;
   g.userData.baseOffset = Math.abs(x);
   scene.add(g);
   buildings.push(g);
+}
+
+const sidewalks: THREE.Group[] = [];
+for (let z = -108; z <= 12; z += 12) {
+  const g = new THREE.Group();
+  for (const side of [-1, 1]) {
+    box(g, material('#a5a7a2', 0.94), [side * 6.45, -0.075, 0], [1.55, 0.16, 12.08], false);
+    box(g, material('#6b777a', 0.92), [side * 5.7, -0.02, 0], [0.12, 0.2, 12.08], false);
+    for (let seam = -4.5; seam <= 4.6; seam += 1.5) box(g, material('#747d7e', 0.95), [side * 6.45, 0.009, seam], [1.45, 0.012, 0.025], false);
+  }
+  g.position.z = z; scene.add(g); sidewalks.push(g);
+}
+const roadsideProps: THREE.Group[] = [];
+for (const side of [-1, 1]) for (let i = 0; i < 10; i++) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.7, 8), material('#67503d', 0.95));
+  trunk.position.y = 0.85; trunk.castShadow = true; g.add(trunk);
+  const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.78 + Math.random() * 0.28, 1), material(['#476b54', '#52765a', '#3f6250'][i % 3], 0.98));
+  crown.position.y = 2.05; crown.scale.set(1, 1.22, 0.9); crown.castShadow = true; g.add(crown);
+  box(g, material('#747d7c', 0.9), [0, 0.12, 0], [1.05, 0.24, 0.95], false);
+  g.position.set(side * (7.35 + Math.random() * 0.35), 0, -i * 12 - 4);
+  g.userData.side = side; scene.add(g); roadsideProps.push(g);
+  if (i % 2 === 0) {
+    const utility = new THREE.Group();
+    box(utility, material('#4f6267', 0.78), [0, 0.55, 0], [0.55, 1.1, 0.48]);
+    box(utility, trimMaterial, [0, 0.55, 0.25], [0.34, 0.72, 0.025], false);
+    utility.position.set(side * 6.95, 0, -i * 12 - 10);
+    utility.userData.side = side; scene.add(utility); roadsideProps.push(utility);
+  }
 }
 
 const streetlights: THREE.Group[] = [];
@@ -246,6 +315,20 @@ function makeHazard(kind: HazardKind): THREE.Group {
     const second = tire.clone();
     second.position.set(0.22, 0.62, 0);
     g.add(second);
+  } else if (kind === 'sign') {
+    box(g, material('#5d6871', 0.65, 0.55), [0, 0.48, 0], [0.1, 0.92, 0.1]);
+    box(g, material('#f4d35e', 0.72), [0, 1.0, 0], [0.92, 0.7, 0.12]);
+    box(g, material('#242e37', 0.7), [0, 1.0, 0.071], [0.66, 0.42, 0.025], false);
+    box(g, material('#f4d35e', 0.65), [0, 1.0, 0.09], [0.09, 0.28, 0.025], false);
+  } else if (kind === 'crate') {
+    box(g, material('#a86f42', 0.94), [0, 0.42, 0], [0.88, 0.82, 0.82]);
+    for (const x of [-0.28, 0.28]) box(g, material('#d39a5c', 0.92), [x, 0.42, 0.425], [0.075, 0.78, 0.025], false);
+    box(g, material('#d39a5c', 0.92), [0, 0.42, 0.43], [0.78, 0.075, 0.025], false);
+  } else if (kind === 'pothole') {
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.09, 7, 24), material('#747c7e', 0.95));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.035; g.add(rim);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.43, 24), material('#080b10', 0.98));
+    hole.rotation.x = -Math.PI / 2; hole.position.y = 0.025; g.add(hole);
   } else {
     const slick = new THREE.Mesh(new THREE.CircleGeometry(0.57, 24), material('#10151a', 0.24, 0.18));
     slick.rotation.x = -Math.PI / 2;
@@ -264,7 +347,7 @@ function makeHazard(kind: HazardKind): THREE.Group {
 let state: GameState = 'ready';
 let targetLane: Lane = 0;
 let lanePosition = 0;
-let distance = 0, score = 0, speed = 120, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
+let distance = 0, score = 0, speed = 120, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, magnetSpawnTimer = 9, magnetTimer = 0, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
 const readSavedNumber = (key: string) => {
   try { const value = Number(localStorage.getItem(key) || 0); return Number.isFinite(value) && value >= 0 ? value : 0; }
   catch { return 0; }
@@ -302,15 +385,19 @@ function updateHud() {
   $('#best-score').textContent = bestScore.toString().padStart(6, '0');
   $('#lifetime-coins').textContent = String(lifetimeCoins);
   $('#runs-played').textContent = String(runsPlayed);
+  $('#magnet-timer').textContent = magnetTimer > 0 ? `${Math.ceil(magnetTimer)}s` : 'OFF';
+  $('#magnet-card').classList.toggle('active', magnetTimer > 0);
 }
 function clearEntities() {
   for (const entity of entities) scene.remove(entity.group);
   entities.length = 0;
   for (const coin of coins) scene.remove(coin.group);
   coins.length = 0;
+  for (const powerup of powerups) scene.remove(powerup.group);
+  powerups.length = 0;
 }
 function resetGame() {
-  clearEntities(); distance = 0; score = 0; speed = 120; difficulty = 1; spawnTimer = 0.9; coinSpawnTimer = 1.2; coinsCollected = 0; brakeHeld = false; boostHeld = false;
+  clearEntities(); distance = 0; score = 0; speed = 120; difficulty = 1; spawnTimer = 0.9; coinSpawnTimer = 1.2; magnetSpawnTimer = 9; magnetTimer = 0; coinsCollected = 0; brakeHeld = false; boostHeld = false;
   runsPlayed += 1;
   try { localStorage.setItem('neon-drive-runs', String(runsPlayed)); } catch { /* Keep the game playable when storage is unavailable. */ }
   $('#runs-played').textContent = String(runsPlayed);
@@ -322,14 +409,14 @@ function resetGame() {
 function spawnEntity() {
   const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
   const roll = Math.random();
-  const kind: HazardKind = roll < 0.43 ? 'car' : roll < 0.56 ? 'truck' : roll < 0.70 ? 'barrier' : roll < 0.82 ? 'cone' : roll < 0.92 ? 'tires' : 'oil';
+  const kind: HazardKind = roll < 0.31 ? 'car' : roll < 0.41 ? 'truck' : roll < 0.53 ? 'barrier' : roll < 0.63 ? 'cone' : roll < 0.72 ? 'tires' : roll < 0.80 ? 'oil' : roll < 0.87 ? 'sign' : roll < 0.94 ? 'crate' : 'pothole';
   const group = makeHazard(kind);
   group.position.set(roadCurve(-92 - distance * 0.95) + laneX(lane), 0, -92); scene.add(group);
   entities.push({ group, kind, lane, z: -92, passed: false });
   if (difficulty > 1.5 && Math.random() < 0.25) {
     const options = ([-1, 0, 1] as Lane[]).filter(l => l !== lane);
     const secondLane = options[Math.floor(Math.random() * options.length)];
-    const secondKind: HazardKind = (['car', 'truck', 'barrier', 'cone', 'tires', 'oil'] as HazardKind[])[Math.floor(Math.random() * 6)];
+    const secondKind: HazardKind = (['car', 'truck', 'barrier', 'cone', 'tires', 'oil', 'sign', 'crate', 'pothole'] as HazardKind[])[Math.floor(Math.random() * 9)];
     const second = makeHazard(secondKind);
     second.position.set(roadCurve(-105 - distance * 0.95) + laneX(secondLane), 0, -105); scene.add(second);
     entities.push({ group: second, kind: secondKind, lane: secondLane, z: -105, passed: false });
@@ -337,6 +424,8 @@ function spawnEntity() {
 }
 interface Coin { group: THREE.Group; lane: Lane; z: number; collected: boolean }
 const coins: Coin[] = [];
+interface PowerUp { group: THREE.Group; lane: Lane; z: number }
+const powerups: PowerUp[] = [];
 const coinMaterial = new THREE.MeshStandardMaterial({ color: '#ffd75a', metalness: 0.78, roughness: 0.22, emissive: '#b77812', emissiveIntensity: 0.7 });
 const coinEdgeMaterial = new THREE.MeshStandardMaterial({ color: '#fff0a6', metalness: 0.72, roughness: 0.2, emissive: '#ffba2e', emissiveIntensity: 1.1 });
 function makeCoin(): THREE.Group {
@@ -351,6 +440,27 @@ function makeCoin(): THREE.Group {
   center.position.z = 0.055;
   group.add(center);
   return group;
+}
+function makeMagnetPickup(): THREE.Group {
+  const group = new THREE.Group();
+  const red = new THREE.MeshStandardMaterial({ color: '#ff4f61', emissive: '#b7193c', emissiveIntensity: 1.15, metalness: 0.22, roughness: 0.28 });
+  const blue = new THREE.MeshStandardMaterial({ color: '#55c8ff', emissive: '#117fc7', emissiveIntensity: 1.1, metalness: 0.28, roughness: 0.25 });
+  const arc = new THREE.TorusGeometry(0.43, 0.13, 12, 16, Math.PI / 2);
+  const magnetRed = new THREE.Mesh(arc, red); group.add(magnetRed);
+  const magnetBlue = new THREE.Mesh(arc, blue); magnetBlue.rotation.z = Math.PI / 2; group.add(magnetBlue);
+  for (const x of [-0.43, 0.43]) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.17, 0.22), x < 0 ? red : blue);
+    cap.position.set(x, 0, 0); group.add(cap);
+  }
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.025, 6, 32), new THREE.MeshBasicMaterial({ color: '#a9f2ff' }));
+  halo.rotation.x = 0.2; group.add(halo);
+  return group;
+}
+function spawnMagnet() {
+  const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
+  const group = makeMagnetPickup();
+  group.position.set(laneX(lane), 1.45, -86);
+  scene.add(group); powerups.push({ group, lane, z: -86 });
 }
 function spawnCoins() {
   const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
@@ -426,6 +536,9 @@ function update(dt: number) {
   if (spawnTimer <= 0) { spawnEntity(); spawnTimer = Math.max(0.78, 1.7 - difficulty * 0.1) + Math.random() * 0.5; }
   coinSpawnTimer -= dt;
   if (coinSpawnTimer <= 0) { spawnCoins(); coinSpawnTimer = 3.8 + Math.random() * 2.2; }
+  magnetSpawnTimer -= dt;
+  if (magnetSpawnTimer <= 0) { spawnMagnet(); magnetSpawnTimer = 17 + Math.random() * 10; }
+  magnetTimer = Math.max(0, magnetTimer - dt);
 
   const currentRoadCenter = roadCurve(2.8 - distance * 0.95);
   const targetX = laneX(targetLane);
@@ -450,7 +563,15 @@ function update(dt: number) {
     building.position.z += travel * 0.72;
     if (building.position.z > 16) building.position.z -= 180;
     const side = building.userData.side as number;
-    building.position.x = side * (Number(building.userData.baseOffset) || 10) + roadCurve(building.position.z - distance * 0.95) * 0.5;
+    building.position.x = side * (Number(building.userData.baseOffset) || 10);
+  }
+  for (const sidewalk of sidewalks) {
+    sidewalk.position.z += travel;
+    if (sidewalk.position.z > 15) sidewalk.position.z -= 120;
+  }
+  for (const prop of roadsideProps) {
+    prop.position.z += travel * 0.82;
+    if (prop.position.z > 14) prop.position.z -= 144;
   }
 
   for (let i = entities.length - 1; i >= 0; i--) {
@@ -459,19 +580,39 @@ function update(dt: number) {
     if (entity.kind === 'car' || entity.kind === 'truck') entity.group.position.x = laneX(entity.lane) + Math.sin(elapsed * 1.4 + i) * 0.035;
     const collisionZone = entity.z > 0.55 && entity.z < 5.2;
     entity.group.position.x = roadCurve(entity.z - distance * 0.95) + laneX(entity.lane) + (entity.kind === 'car' || entity.kind === 'truck' ? Math.sin(elapsed * 1.4 + i) * 0.035 : 0);
-    const overlaps = Math.abs(entity.group.position.x - player.position.x) < (entity.kind === 'cone' || entity.kind === 'oil' ? 0.95 : entity.kind === 'tires' ? 1.15 : 1.42);
+    const overlaps = Math.abs(entity.group.position.x - player.position.x) < (entity.kind === 'cone' || entity.kind === 'oil' || entity.kind === 'pothole' ? 0.95 : entity.kind === 'tires' || entity.kind === 'crate' ? 1.15 : entity.kind === 'sign' ? 1.0 : 1.42);
     if (collisionZone && overlaps) { crash(); break; }
     if (!entity.passed && entity.z > 5.2) { entity.passed = true; score += entity.kind === 'car' || entity.kind === 'truck' ? 100 : 150; }
     if (entity.z > 15) { scene.remove(entity.group); entities.splice(i, 1); }
+  }
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    const powerup = powerups[i];
+    powerup.z += travel;
+    powerup.group.position.z = powerup.z;
+    powerup.group.position.y = 1.45 + Math.sin(elapsed * 4 + i) * 0.13;
+    powerup.group.rotation.y += dt * 1.6;
+    powerup.group.position.x = laneX(powerup.lane);
+    if (Math.abs(powerup.z - player.position.z) < 1.7 && Math.abs(powerup.group.position.x - player.position.x) < 1.35) {
+      magnetTimer = 30;
+      scene.remove(powerup.group); powerups.splice(i, 1);
+      $('#magnet-card').classList.add('active');
+      $('#magnet-timer').textContent = '30s';
+      continue;
+    }
+    if (powerup.z > 14) { scene.remove(powerup.group); powerups.splice(i, 1); }
   }
   for (let i = coins.length - 1; i >= 0; i--) {
     const coin = coins[i];
     coin.z += travel;
     coin.group.position.z = coin.z;
-    coin.group.position.x = roadCurve(coin.z - distance * 0.95) + laneX(coin.lane);
+    const normalCoinX = roadCurve(coin.z - distance * 0.95) + laneX(coin.lane);
+    if (magnetTimer > 0 && coin.z > -42) {
+      coin.group.position.x = THREE.MathUtils.damp(coin.group.position.x, player.position.x, 4.2, dt);
+    } else coin.group.position.x = normalCoinX;
     coin.group.rotation.y += dt * 2.8;
     coin.group.position.y = 1.15 + Math.sin(elapsed * 5 + i * 0.6) * 0.08;
-    if (Math.abs(coin.z - player.position.z) < 1.35 && Math.abs(coin.group.position.x - player.position.x) < 1.12) {
+    const magnetRange = magnetTimer > 0;
+    if (Math.abs(coin.z - player.position.z) < (magnetRange ? 5.8 : 1.35) && Math.abs(coin.group.position.x - player.position.x) < (magnetRange ? 2.35 : 1.12)) {
       coinsCollected += 1;
       lifetimeCoins += 1;
       try { localStorage.setItem('neon-drive-coins', String(lifetimeCoins)); } catch { /* Keep collecting if storage is unavailable. */ }
@@ -484,6 +625,8 @@ function update(dt: number) {
     if (coin.z > 14) { scene.remove(coin.group); coins.splice(i, 1); }
   }
   crashCooldown = Math.max(0, crashCooldown - dt);
+  $('#magnet-timer').textContent = magnetTimer > 0 ? `${Math.ceil(magnetTimer)}s` : 'OFF';
+  $('#magnet-card').classList.toggle('active', magnetTimer > 0);
   updateHud();
 }
 
