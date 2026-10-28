@@ -286,6 +286,20 @@ function makeHazard(kind: HazardKind): THREE.Group {
     const second = tire.clone();
     second.position.set(0.22, 0.62, 0);
     g.add(second);
+  } else if (kind === 'sign') {
+    box(g, material('#5d6871', 0.65, 0.55), [0, 0.48, 0], [0.1, 0.92, 0.1]);
+    box(g, material('#f4d35e', 0.72), [0, 1.0, 0], [0.92, 0.7, 0.12]);
+    box(g, material('#242e37', 0.7), [0, 1.0, 0.071], [0.66, 0.42, 0.025], false);
+    box(g, material('#f4d35e', 0.65), [0, 1.0, 0.09], [0.09, 0.28, 0.025], false);
+  } else if (kind === 'crate') {
+    box(g, material('#a86f42', 0.94), [0, 0.42, 0], [0.88, 0.82, 0.82]);
+    for (const x of [-0.28, 0.28]) box(g, material('#d39a5c', 0.92), [x, 0.42, 0.425], [0.075, 0.78, 0.025], false);
+    box(g, material('#d39a5c', 0.92), [0, 0.42, 0.43], [0.78, 0.075, 0.025], false);
+  } else if (kind === 'pothole') {
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.09, 7, 24), material('#747c7e', 0.95));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.035; g.add(rim);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.43, 24), material('#080b10', 0.98));
+    hole.rotation.x = -Math.PI / 2; hole.position.y = 0.025; g.add(hole);
   } else {
     const slick = new THREE.Mesh(new THREE.CircleGeometry(0.57, 24), material('#10151a', 0.24, 0.18));
     slick.rotation.x = -Math.PI / 2;
@@ -362,14 +376,14 @@ function resetGame() {
 function spawnEntity() {
   const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
   const roll = Math.random();
-  const kind: HazardKind = roll < 0.43 ? 'car' : roll < 0.56 ? 'truck' : roll < 0.70 ? 'barrier' : roll < 0.82 ? 'cone' : roll < 0.92 ? 'tires' : 'oil';
+  const kind: HazardKind = roll < 0.31 ? 'car' : roll < 0.41 ? 'truck' : roll < 0.53 ? 'barrier' : roll < 0.63 ? 'cone' : roll < 0.72 ? 'tires' : roll < 0.80 ? 'oil' : roll < 0.87 ? 'sign' : roll < 0.94 ? 'crate' : 'pothole';
   const group = makeHazard(kind);
   group.position.set(roadCurve(-92 - distance * 0.95) + laneX(lane), 0, -92); scene.add(group);
   entities.push({ group, kind, lane, z: -92, passed: false });
   if (difficulty > 1.5 && Math.random() < 0.25) {
     const options = ([-1, 0, 1] as Lane[]).filter(l => l !== lane);
     const secondLane = options[Math.floor(Math.random() * options.length)];
-    const secondKind: HazardKind = (['car', 'truck', 'barrier', 'cone', 'tires', 'oil'] as HazardKind[])[Math.floor(Math.random() * 6)];
+    const secondKind: HazardKind = (['car', 'truck', 'barrier', 'cone', 'tires', 'oil', 'sign', 'crate', 'pothole'] as HazardKind[])[Math.floor(Math.random() * 9)];
     const second = makeHazard(secondKind);
     second.position.set(roadCurve(-105 - distance * 0.95) + laneX(secondLane), 0, -105); scene.add(second);
     entities.push({ group: second, kind: secondKind, lane: secondLane, z: -105, passed: false });
@@ -499,7 +513,7 @@ function update(dt: number) {
     if (entity.kind === 'car' || entity.kind === 'truck') entity.group.position.x = laneX(entity.lane) + Math.sin(elapsed * 1.4 + i) * 0.035;
     const collisionZone = entity.z > 0.55 && entity.z < 5.2;
     entity.group.position.x = roadCurve(entity.z - distance * 0.95) + laneX(entity.lane) + (entity.kind === 'car' || entity.kind === 'truck' ? Math.sin(elapsed * 1.4 + i) * 0.035 : 0);
-    const overlaps = Math.abs(entity.group.position.x - player.position.x) < (entity.kind === 'cone' || entity.kind === 'oil' ? 0.95 : entity.kind === 'tires' ? 1.15 : 1.42);
+    const overlaps = Math.abs(entity.group.position.x - player.position.x) < (entity.kind === 'cone' || entity.kind === 'oil' || entity.kind === 'pothole' ? 0.95 : entity.kind === 'tires' || entity.kind === 'crate' ? 1.15 : entity.kind === 'sign' ? 1.0 : 1.42);
     if (collisionZone && overlaps) { crash(); break; }
     if (!entity.passed && entity.z > 5.2) { entity.passed = true; score += entity.kind === 'car' || entity.kind === 'truck' ? 100 : 150; }
     if (entity.z > 15) { scene.remove(entity.group); entities.splice(i, 1); }
