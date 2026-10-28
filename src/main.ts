@@ -395,11 +395,10 @@ function update(dt: number) {
 }
 
 function updateCamera(dt: number) {
-  const desired = new THREE.Vector3(player.position.x * 0.36, 5.3, 10.5);
+  const roadCameraOffset = roadCurve(2.8 - distance * 0.95) * 0.3 + (boostHeld ? Math.sin(elapsed * 26) * 0.018 : 0);
+  const desired = new THREE.Vector3(player.position.x * 0.36 + roadCameraOffset, 5.3, 10.5);
   camera.position.lerp(desired, 1 - Math.exp(-2.5 * dt));
-  camera.position.x += roadCurve(2.8 - distance * 0.95) * 0.3;
   camera.lookAt(player.position.x * 0.23, 0.7, -8.5);
-  if (boostHeld) camera.position.x += Math.sin(elapsed * 26) * 0.018;
 }
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
