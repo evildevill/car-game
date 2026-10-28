@@ -338,6 +338,7 @@ function update(dt: number) {
   coinSpawnTimer -= dt;
   if (coinSpawnTimer <= 0) { spawnCoins(); coinSpawnTimer = 3.8 + Math.random() * 2.2; }
 
+  const currentRoadCenter = roadCurve(2.8 - distance * 0.95);
   const targetX = laneX(targetLane);
   lanePosition = THREE.MathUtils.damp(lanePosition, targetX, 8.5, dt);
   player.position.x = currentRoadCenter + lanePosition;
@@ -350,7 +351,6 @@ function update(dt: number) {
     if (chunk.position.z > 15) chunk.position.z -= 126;
     chunk.position.x = roadCurve(chunk.position.z - distance * 0.95);
   }
-  const currentRoadCenter = roadCurve(2.8 - distance * 0.95);
   for (const light of streetlights) {
     light.position.z += travel;
     if (light.position.z > 12) light.position.z -= 118;
