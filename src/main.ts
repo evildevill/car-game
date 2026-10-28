@@ -62,43 +62,97 @@ function box(parent: THREE.Object3D, material: THREE.Material, pos: [number, num
 
 function makeCar(color: string, playerCar = false, truck = false): THREE.Group {
   const car = new THREE.Group();
-  const paint = material(color, 0.28, 0.48);
-  const glass = material('#152432', 0.2, 0.25);
+  const paint = material(color, 0.24, 0.58);
+  const darkPaint = material('#202b35', 0.38, 0.55);
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#172b3b', roughness: 0.12, metalness: 0.18, clearcoat: 0.9, clearcoatRoughness: 0.12 });
+  const chrome = material('#d3dce4', 0.22, 0.82);
+  const black = material('#080d12', 0.62, 0.12);
+  const wheelRim = material('#aebbc7', 0.23, 0.82);
+  const brakeDisc = material('#59636d', 0.4, 0.72);
   if (truck) {
-    box(car, paint, [0, 0.75, -0.05], [1.65, 1.12, 3.1]);
-    box(car, material('#d5dce2', 0.35), [0, 1.38, 0.82], [1.48, 0.38, 1.15]);
+    box(car, paint, [0, 0.76, -0.12], [1.68, 1.15, 3.18]);
+    box(car, material('#d8dfe5', 0.4, 0.15), [0, 1.42, 0.88], [1.5, 0.45, 1.22]);
+    box(car, glass, [0, 1.48, 1.51], [1.25, 0.3, 0.035], false);
   } else {
-    box(car, paint, [0, 0.54, 0], [1.42, 0.42, 2.48]);
-    box(car, paint, [0, 0.87, -0.12], [1.08, 0.49, 1.28]);
-    box(car, glass, [0, 0.91, -0.10], [0.94, 0.34, 1.10]);
-    box(car, paint, [0, 0.73, 0.88], [1.2, 0.13, 0.46]);
-    box(car, paint, [0, 0.72, -0.94], [1.2, 0.12, 0.3]);
+    // Low wide chassis, hood and rear deck give the silhouette a less toy-like profile.
+    box(car, darkPaint, [0, 0.43, -0.02], [1.48, 0.3, 2.72]);
+    box(car, paint, [0, 0.56, 0.06], [1.55, 0.39, 2.58]);
+    box(car, paint, [0, 0.66, 0.72], [1.38, 0.2, 0.86]);
+    box(car, paint, [0, 0.65, -0.91], [1.3, 0.18, 0.48]);
+    // Roof/cabin and individually separated glass panels.
+    box(car, paint, [0, 0.91, -0.16], [1.08, 0.16, 1.16]);
+    const frontGlass = box(car, glass, [0, 0.84, 0.43], [0.91, 0.055, 0.47], false);
+    frontGlass.rotation.x = -0.43;
+    const rearGlass = box(car, glass, [0, 0.84, -0.62], [0.88, 0.055, 0.37], false);
+    rearGlass.rotation.x = 0.48;
+    for (const side of [-1, 1]) {
+      // Side windows, door beltline, handles and wing mirrors.
+      box(car, glass, [side * 0.548, 0.91, -0.15], [0.035, 0.23, 0.62], false);
+      box(car, glass, [side * 0.55, 0.9, 0.27], [0.035, 0.2, 0.25], false);
+      box(car, darkPaint, [side * 0.72, 0.58, -0.08], [0.025, 0.07, 1.3], false);
+      box(car, chrome, [side * 0.565, 0.69, -0.24], [0.035, 0.025, 0.17], false);
+      const mirror = box(car, paint, [side * 0.69, 0.81, 0.31], [0.16, 0.11, 0.2], false);
+      mirror.rotation.y = side * 0.12;
+    }
+    // Front and rear bumpers, lower intake and grille.
+    box(car, darkPaint, [0, 0.43, 1.34], [1.36, 0.18, 0.12]);
+    box(car, black, [0, 0.49, 1.405], [0.58, 0.12, 0.025], false);
+    box(car, chrome, [0, 0.49, 1.423], [0.025, 0.08, 0.012], false);
+    box(car, darkPaint, [0, 0.43, -1.34], [1.35, 0.16, 0.12]);
+    // Subtle hood creases and rear spoiler.
+    for (const x of [-0.43, 0.43]) {
+      const crease = box(car, material('#d8e2e9', 0.36, 0.42), [x, 0.765, 0.73], [0.018, 0.008, 0.54], false);
+      crease.rotation.y = x * 0.04;
+    }
+    box(car, darkPaint, [0, 0.79, -1.1], [1.1, 0.035, 0.11], false);
   }
-  for (const x of [-0.72, 0.72]) for (const z of [-0.82, 0.82]) {
-    const wheel = new THREE.Mesh(wheelGeo, tireMat);
+  const wheelPositions = truck ? [-1.05, 1.0] : [-0.86, 0.88];
+  for (const z of wheelPositions) for (const x of [-0.77, 0.77]) {
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(truck ? 0.39 : 0.34, truck ? 0.39 : 0.34, 0.22, 24), tireMat);
     wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, 0.36, z);
+    wheel.position.set(x, truck ? 0.4 : 0.37, z);
     wheel.castShadow = true;
     car.add(wheel);
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.24, 14), rimMat);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.225, 20), brakeDisc);
+    disc.rotation.z = Math.PI / 2;
+    disc.position.copy(wheel.position);
+    car.add(disc);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.235, 16), wheelRim);
     rim.rotation.z = Math.PI / 2;
     rim.position.copy(wheel.position);
     car.add(rim);
+    for (let spoke = 0; spoke < 5; spoke++) {
+      const angle = spoke * Math.PI * 2 / 5;
+      const spokeMesh = box(car, chrome, [x + Math.sign(x) * 0.122, wheel.position.y + Math.cos(angle) * 0.105, z + Math.sin(angle) * 0.105], [0.018, 0.025, 0.14], false);
+      spokeMesh.rotation.x = angle;
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.24, 12), chrome);
+    hub.rotation.z = Math.PI / 2;
+    hub.position.copy(wheel.position);
+    car.add(hub);
   }
-  for (const x of [-0.48, 0.48]) {
-    box(car, playerCar ? headlightMat : material('#f2e8c8', 0.25), [x, 0.6, truck ? 1.57 : 1.255], [0.24, 0.12, 0.035], false);
-    box(car, tailLightMat, [x, 0.6, -1.26], [0.22, 0.12, 0.035], false);
+  for (const x of [-0.5, 0.5]) {
+    const frontZ = truck ? 1.53 : 1.35;
+    const lamp = box(car, playerCar ? headlightMat : material('#fff2ce', 0.22), [x, 0.62, frontZ], [0.28, 0.105, 0.035], false);
+    lamp.rotation.y = -x * 0.08;
+    box(car, tailLightMat, [x, 0.61, truck ? -1.72 : -1.34], [0.24, 0.11, 0.035], false);
+    if (!truck) box(car, material('#f7f9ff', 0.2), [x, 0.48, 1.413], [0.19, 0.035, 0.02], false);
   }
   if (playerCar) {
-    const underglow = new THREE.PointLight('#b9ff4f', 3, 4);
+    const underglow = new THREE.PointLight('#b9ff4f', 2.1, 3.5);
     underglow.position.set(0, 0.12, 0);
     car.add(underglow);
-    box(car, material('#d8ff7a', 0.25, 0.5), [0, 0.48, 0.05], [0.06, 0.025, 1.7], false);
+    box(car, material('#d8ff7a', 0.25, 0.5), [0, 0.39, 0.05], [0.045, 0.018, 1.7], false);
   }
   return car;
 }
 
 const laneX = (lane: Lane) => lane * 3.15;
+// A periodic curve matches the 126-unit road recycle distance, preventing visible lateral jumps.
+const roadCurve = (z: number) =>
+  2.45 * Math.sin((z * Math.PI * 2) / 126) +
+  1.15 * Math.sin((z * Math.PI * 4) / 126) +
+  0.38 * Math.sin((z * Math.PI * 8) / 126);
 const road = new THREE.Group();
 scene.add(road);
 const roadChunks: THREE.Group[] = [];
@@ -107,15 +161,17 @@ for (let z = -108; z <= 12; z += roadChunkLength) {
   const chunk = new THREE.Group();
   box(chunk, roadMat, [0, -0.14, 0], [10.4, 0.28, roadChunkLength + 0.08], false);
   for (const side of [-1, 1]) {
-    box(chunk, curbMat, [side * 5.35, -0.08, 0], [0.34, 0.22, roadChunkLength + 0.08], false);
-    box(chunk, new THREE.MeshStandardMaterial({ color: '#b8f34d', emissive: '#7da52b', emissiveIntensity: 0.35, roughness: 0.65 }), [side * 5.18, 0.025, 0], [0.035, 0.025, roadChunkLength + 0.08], false);
+    box(chunk, curbMat, [side * 5.35, -0.045, 0], [0.38, 0.24, roadChunkLength + 0.08], false);
+    box(chunk, new THREE.MeshStandardMaterial({ color: '#f5f7fa', emissive: '#a9c5d8', emissiveIntensity: 0.2, roughness: 0.55 }), [side * 5.08, 0.018, 0], [0.11, 0.035, roadChunkLength + 0.08], false);
+    box(chunk, new THREE.MeshStandardMaterial({ color: '#c7ff54', emissive: '#83a92d', emissiveIntensity: 0.45, roughness: 0.5 }), [side * 5.27, 0.03, 0], [0.045, 0.035, roadChunkLength + 0.08], false);
   }
-  for (const x of [-1.73, 1.73]) box(chunk, stripeMat, [x, 0.015, 0], [0.075, 0.025, 2.65], false);
+  for (const x of [-1.73, 1.73]) {
+    box(chunk, stripeMat, [x, 0.025, 0], [0.12, 0.035, 3.0], false);
+  }
+  chunk.position.set(roadCurve(z), 0, z);
   road.add(chunk);
   roadChunks.push(chunk);
 }
-const roadCurve = (z: number) =>
-  2.15 * Math.sin(z / 27) + 1.05 * Math.sin(z / 13.5) + 0.35 * Math.sin(z / 7.5);
 const buildingMaterials = ['#344351', '#46505c', '#3b4653', '#56616b', '#303c4a'].map(c => material(c, 0.92));
 const windowMaterials = [
   new THREE.MeshStandardMaterial({ color: '#9fe4ff', emissive: '#4ca8d6', emissiveIntensity: 0.65, roughness: 0.35 }),
@@ -191,7 +247,7 @@ function makeHazard(kind: HazardKind): THREE.Group {
 let state: GameState = 'ready';
 let targetLane: Lane = 0;
 let lanePosition = 0;
-let distance = 0, score = 0, speed = 0, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
+let distance = 0, score = 0, speed = 120, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
 let bestScore = Number(localStorage.getItem('neon-drive-best') || 0);
 let boostHeld = false;
 let brakeHeld = false;
@@ -218,7 +274,7 @@ function updateHud() {
   distanceEl.textContent = Math.floor(distance).toString().padStart(4, '0');
   scoreEl.textContent = Math.floor(score).toString().padStart(6, '0');
   speedEl.textContent = Math.round(speed).toString();
-  meter.style.width = Math.min(100, Math.max(0, speed / 1.15)) + '%';
+  meter.style.width = Math.min(100, Math.max(0, (speed - 80) / 1.2)) + '%';
   coinsEl.textContent = coinsCollected.toString().padStart(3, '0');
 }
 function clearEntities() {
@@ -228,9 +284,9 @@ function clearEntities() {
   coins.length = 0;
 }
 function resetGame() {
-  clearEntities(); distance = 0; score = 0; speed = 0; difficulty = 1; spawnTimer = 1.1; coinSpawnTimer = 0.8; coinsCollected = 0; brakeHeld = false; boostHeld = false;
+  clearEntities(); distance = 0; score = 0; speed = 120; difficulty = 1; spawnTimer = 0.9; coinSpawnTimer = 1.2; coinsCollected = 0; brakeHeld = false; boostHeld = false;
   targetLane = 0; lanePosition = 0; elapsed = 0; crashCooldown = 0;
-  player.position.set(0, 0.02, 2.8); player.rotation.set(0, 0, 0);
+  player.position.set(roadCurve(2.8 - distance * 0.95), 0.02, 2.8); player.rotation.set(0, 0, 0);
   updateHud(); setState('playing');
 }
 function spawnEntity() {
@@ -238,14 +294,14 @@ function spawnEntity() {
   const roll = Math.random();
   const kind: HazardKind = roll < 0.62 ? 'car' : roll < 0.75 ? 'truck' : roll < 0.9 ? 'barrier' : 'cone';
   const group = makeHazard(kind);
-  group.position.set(laneX(lane), 0, -92); scene.add(group);
+  group.position.set(roadCurve(-92 - distance * 0.95) + laneX(lane), 0, -92); scene.add(group);
   entities.push({ group, kind, lane, z: -92, passed: false });
   if (difficulty > 1.5 && Math.random() < 0.25) {
     const options = ([-1, 0, 1] as Lane[]).filter(l => l !== lane);
     const secondLane = options[Math.floor(Math.random() * options.length)];
     const secondKind: HazardKind = Math.random() < 0.7 ? 'car' : 'barrier';
     const second = makeHazard(secondKind);
-    second.position.set(laneX(secondLane), 0, -105); scene.add(second);
+    second.position.set(roadCurve(-105 - distance * 0.95) + laneX(secondLane), 0, -105); scene.add(second);
     entities.push({ group: second, kind: secondKind, lane: secondLane, z: -105, passed: false });
   }
 }
@@ -328,10 +384,10 @@ function update(dt: number) {
   elapsed += dt;
   const boost = boostHeld || keys.has('w') || keys.has('arrowup');
   const braking = brakeHeld || keys.has(' ') || keys.has('s') || keys.has('arrowdown');
-  // A gentle cruise by default; acceleration is deliberately reserved for the boost key.
-  const targetSpeed = braking ? 0 : boost ? 112 : 22 + Math.min(8, difficulty * 0.8);
-  speed = THREE.MathUtils.damp(speed, targetSpeed, braking ? 7.5 : boost ? 1.45 : 0.95, dt);
-  const travel = speed / 3.6 * dt * 0.72;
+  // Restore the original fast arcade pace; Space/S/Down remain a dedicated brake.
+  const targetSpeed = braking ? 82 : boost ? 205 : 120 + Math.min(48, difficulty * 5);
+  speed = THREE.MathUtils.damp(speed, targetSpeed, 1.8, dt);
+  const travel = speed / 3.6 * dt;
   distance += travel * 0.95; score += travel * 10; difficulty = 1 + distance / 280;
   spawnTimer -= dt;
   if (spawnTimer <= 0) { spawnEntity(); spawnTimer = Math.max(0.78, 1.7 - difficulty * 0.1) + Math.random() * 0.5; }
@@ -342,9 +398,10 @@ function update(dt: number) {
   const targetX = laneX(targetLane);
   lanePosition = THREE.MathUtils.damp(lanePosition, targetX, 8.5, dt);
   player.position.x = currentRoadCenter + lanePosition;
+  const roadHeading = THREE.MathUtils.clamp(roadCurve(2.8 - distance * 0.95) - roadCurve(0.8 - distance * 0.95), -0.12, 0.12);
   player.position.y = 0.02 + Math.sin(elapsed * 16) * 0.012 * (speed / 120);
   player.rotation.z = THREE.MathUtils.clamp((targetX - lanePosition) * -0.045, -0.12, 0.12);
-  player.rotation.y = THREE.MathUtils.clamp((lanePosition - targetX) * 0.045, -0.12, 0.12);
+  player.rotation.y = roadHeading + THREE.MathUtils.clamp((lanePosition - targetX) * 0.045, -0.12, 0.12);
 
   for (const chunk of roadChunks) {
     chunk.position.z += travel;

@@ -6,3 +6,5 @@
 .mobile-controls #brake-button{color:#fff;background:#1b2736e8;border-color:#ffffff45}
 .mobile-controls #boost-button{color:var(--lime)}
 @media(max-width:760px){.hud{flex-wrap:wrap;max-width:calc(100% - 24px)}.coin-card{min-width:72px!important}.mobile-controls{bottom:50px}.mobile-action-stack{gap:6px}}
+
+/* Road readability: stronger asphalt/marking contrast and keep the scene itself unobscured. */
