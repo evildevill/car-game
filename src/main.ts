@@ -148,8 +148,11 @@ function makeCar(color: string, playerCar = false, truck = false): THREE.Group {
 }
 
 const laneX = (lane: Lane) => lane * 3.15;
+// A periodic curve matches the 126-unit road recycle distance, preventing visible lateral jumps.
 const roadCurve = (z: number) =>
-  2.45 * Math.sin(z / 29) + 1.15 * Math.sin(z / 14.5) + 0.38 * Math.sin(z / 7.8);
+  2.45 * Math.sin((z * Math.PI * 2) / 126) +
+  1.15 * Math.sin((z * Math.PI * 4) / 126) +
+  0.38 * Math.sin((z * Math.PI * 8) / 126);
 const road = new THREE.Group();
 scene.add(road);
 const roadChunks: THREE.Group[] = [];
@@ -271,7 +274,7 @@ function updateHud() {
   distanceEl.textContent = Math.floor(distance).toString().padStart(4, '0');
   scoreEl.textContent = Math.floor(score).toString().padStart(6, '0');
   speedEl.textContent = Math.round(speed).toString();
-  meter.style.width = Math.min(100, Math.max(0, speed / 1.15)) + '%';
+  meter.style.width = Math.min(100, Math.max(0, (speed - 80) / 1.2)) + '%';
   coinsEl.textContent = coinsCollected.toString().padStart(3, '0');
 }
 function clearEntities() {
