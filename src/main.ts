@@ -240,6 +240,35 @@ for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
   buildings.push(g);
 }
 
+const sidewalks: THREE.Group[] = [];
+for (let z = -108; z <= 12; z += 12) {
+  const g = new THREE.Group();
+  for (const side of [-1, 1]) {
+    box(g, material('#a5a7a2', 0.94), [side * 6.45, -0.075, 0], [1.55, 0.16, 12.08], false);
+    box(g, material('#6b777a', 0.92), [side * 5.7, -0.02, 0], [0.12, 0.2, 12.08], false);
+    for (let seam = -4.5; seam <= 4.6; seam += 1.5) box(g, material('#747d7e', 0.95), [side * 6.45, 0.009, seam], [1.45, 0.012, 0.025], false);
+  }
+  g.position.z = z; scene.add(g); sidewalks.push(g);
+}
+const roadsideProps: THREE.Group[] = [];
+for (const side of [-1, 1]) for (let i = 0; i < 10; i++) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.7, 8), material('#67503d', 0.95));
+  trunk.position.y = 0.85; trunk.castShadow = true; g.add(trunk);
+  const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.78 + Math.random() * 0.28, 1), material(['#476b54', '#52765a', '#3f6250'][i % 3], 0.98));
+  crown.position.y = 2.05; crown.scale.set(1, 1.22, 0.9); crown.castShadow = true; g.add(crown);
+  box(g, material('#747d7c', 0.9), [0, 0.12, 0], [1.05, 0.24, 0.95], false);
+  g.position.set(side * (7.35 + Math.random() * 0.35), 0, -i * 12 - 4);
+  g.userData.side = side; scene.add(g); roadsideProps.push(g);
+  if (i % 2 === 0) {
+    const utility = new THREE.Group();
+    box(utility, material('#4f6267', 0.78), [0, 0.55, 0], [0.55, 1.1, 0.48]);
+    box(utility, trimMaterial, [0, 0.55, 0.25], [0.34, 0.72, 0.025], false);
+    utility.position.set(side * 6.95, 0, -i * 12 - 10);
+    utility.userData.side = side; scene.add(utility); roadsideProps.push(utility);
+  }
+}
+
 const streetlights: THREE.Group[] = [];
 for (let z = 5; z > -110; z -= 14) for (const [side, offset] of [[-1, 0], [1, -5]] as const) {
   const g = new THREE.Group();
@@ -504,7 +533,15 @@ function update(dt: number) {
     building.position.z += travel * 0.72;
     if (building.position.z > 16) building.position.z -= 180;
     const side = building.userData.side as number;
-    building.position.x = side * (Number(building.userData.baseOffset) || 10) + roadCurve(building.position.z - distance * 0.95) * 0.5;
+    building.position.x = side * (Number(building.userData.baseOffset) || 10);
+  }
+  for (const sidewalk of sidewalks) {
+    sidewalk.position.z += travel;
+    if (sidewalk.position.z > 15) sidewalk.position.z -= 120;
+  }
+  for (const prop of roadsideProps) {
+    prop.position.z += travel * 0.82;
+    if (prop.position.z > 14) prop.position.z -= 144;
   }
 
   for (let i = entities.length - 1; i >= 0; i--) {
