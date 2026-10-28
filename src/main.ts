@@ -3,7 +3,7 @@ import './style.css';
 
 type GameState = 'ready' | 'playing' | 'paused' | 'over';
 type Lane = -1 | 0 | 1;
-type HazardKind = 'car' | 'truck' | 'barrier' | 'cone';
+type HazardKind = 'car' | 'truck' | 'barrier' | 'cone' | 'tires' | 'oil';
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const root = $('#game-root');
@@ -148,11 +148,8 @@ function makeCar(color: string, playerCar = false, truck = false): THREE.Group {
 }
 
 const laneX = (lane: Lane) => lane * 3.15;
-// A periodic curve matches the 126-unit road recycle distance, preventing visible lateral jumps.
-const roadCurve = (z: number) =>
-  2.45 * Math.sin((z * Math.PI * 2) / 126) +
-  1.15 * Math.sin((z * Math.PI * 4) / 126) +
-  0.38 * Math.sin((z * Math.PI * 8) / 126);
+// Keep the driving surface straight and stable; lane positions are measured from the road center.
+const roadCurve = (_z: number) => 0;
 const road = new THREE.Group();
 scene.add(road);
 const roadChunks: THREE.Group[] = [];
@@ -235,11 +232,31 @@ function makeHazard(kind: HazardKind): THREE.Group {
       stripe.rotation.z = -0.45;
     }
     box(g, material('#d6d9dc'), [0, 0.05, 0], [1.85, 0.12, 0.5]);
-  } else {
+  } else if (kind === 'cone') {
     const cone = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.78, 16), material('#ff793e'));
     cone.position.y = 0.4; cone.castShadow = true; g.add(cone);
     box(g, material('#f3eee1'), [0, 0.08, 0], [0.39, 0.08, 0.39]);
     box(g, material('#f3eee1'), [0, 0.42, 0], [0.29, 0.07, 0.29]);
+  } else if (kind === 'tires') {
+    const tire = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.13, 10, 20), tireMat);
+    tire.rotation.x = Math.PI / 2;
+    tire.position.set(0, 0.34, 0);
+    tire.castShadow = true;
+    g.add(tire);
+    const second = tire.clone();
+    second.position.set(0.22, 0.62, 0);
+    g.add(second);
+  } else {
+    const slick = new THREE.Mesh(new THREE.CircleGeometry(0.57, 24), material('#10151a', 0.24, 0.18));
+    slick.rotation.x = -Math.PI / 2;
+    slick.scale.set(1.15, 0.65, 1);
+    slick.position.y = 0.025;
+    g.add(slick);
+    const sheen = new THREE.Mesh(new THREE.CircleGeometry(0.28, 18), material('#45515a', 0.2, 0.3));
+    sheen.rotation.x = -Math.PI / 2;
+    sheen.scale.set(1.2, 0.55, 1);
+    sheen.position.set(-0.12, 0.03, 0.04);
+    g.add(sheen);
   }
   return g;
 }
@@ -248,7 +265,13 @@ let state: GameState = 'ready';
 let targetLane: Lane = 0;
 let lanePosition = 0;
 let distance = 0, score = 0, speed = 120, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
-let bestScore = Number(localStorage.getItem('neon-drive-best') || 0);
+const readSavedNumber = (key: string) => {
+  try { const value = Number(localStorage.getItem(key) || 0); return Number.isFinite(value) && value >= 0 ? value : 0; }
+  catch { return 0; }
+};
+let bestScore = readSavedNumber('neon-drive-best');
+let lifetimeCoins = readSavedNumber('neon-drive-coins');
+let runsPlayed = readSavedNumber('neon-drive-runs');
 let boostHeld = false;
 let brakeHeld = false;
 const keys = new Set<string>();
@@ -275,7 +298,10 @@ function updateHud() {
   scoreEl.textContent = Math.floor(score).toString().padStart(6, '0');
   speedEl.textContent = Math.round(speed).toString();
   meter.style.width = Math.min(100, Math.max(0, (speed - 80) / 1.2)) + '%';
-  coinsEl.textContent = coinsCollected.toString().padStart(3, '0');
+  coinsEl.textContent = lifetimeCoins.toString().padStart(3, '0');
+  $('#best-score').textContent = bestScore.toString().padStart(6, '0');
+  $('#lifetime-coins').textContent = String(lifetimeCoins);
+  $('#runs-played').textContent = String(runsPlayed);
 }
 function clearEntities() {
   for (const entity of entities) scene.remove(entity.group);
@@ -285,6 +311,10 @@ function clearEntities() {
 }
 function resetGame() {
   clearEntities(); distance = 0; score = 0; speed = 120; difficulty = 1; spawnTimer = 0.9; coinSpawnTimer = 1.2; coinsCollected = 0; brakeHeld = false; boostHeld = false;
+  runsPlayed += 1;
+  try { localStorage.setItem('neon-drive-runs', String(runsPlayed)); } catch { /* Keep the game playable when storage is unavailable. */ }
+  $('#runs-played').textContent = String(runsPlayed);
+  $('#lifetime-coins').textContent = String(lifetimeCoins);
   targetLane = 0; lanePosition = 0; elapsed = 0; crashCooldown = 0;
   player.position.set(roadCurve(2.8 - distance * 0.95), 0.02, 2.8); player.rotation.set(0, 0, 0);
   updateHud(); setState('playing');
@@ -292,14 +322,14 @@ function resetGame() {
 function spawnEntity() {
   const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
   const roll = Math.random();
-  const kind: HazardKind = roll < 0.62 ? 'car' : roll < 0.75 ? 'truck' : roll < 0.9 ? 'barrier' : 'cone';
+  const kind: HazardKind = roll < 0.43 ? 'car' : roll < 0.56 ? 'truck' : roll < 0.70 ? 'barrier' : roll < 0.82 ? 'cone' : roll < 0.92 ? 'tires' : 'oil';
   const group = makeHazard(kind);
   group.position.set(roadCurve(-92 - distance * 0.95) + laneX(lane), 0, -92); scene.add(group);
   entities.push({ group, kind, lane, z: -92, passed: false });
   if (difficulty > 1.5 && Math.random() < 0.25) {
     const options = ([-1, 0, 1] as Lane[]).filter(l => l !== lane);
     const secondLane = options[Math.floor(Math.random() * options.length)];
-    const secondKind: HazardKind = Math.random() < 0.7 ? 'car' : 'barrier';
+    const secondKind: HazardKind = (['car', 'truck', 'barrier', 'cone', 'tires', 'oil'] as HazardKind[])[Math.floor(Math.random() * 6)];
     const second = makeHazard(secondKind);
     second.position.set(roadCurve(-105 - distance * 0.95) + laneX(secondLane), 0, -105); scene.add(second);
     entities.push({ group: second, kind: secondKind, lane: secondLane, z: -105, passed: false });
@@ -342,6 +372,9 @@ function crash() {
   bestScore = Math.max(bestScore, Math.floor(score));
   localStorage.setItem('neon-drive-best', String(bestScore));
   $('#best-score').textContent = bestScore.toString().padStart(6, '0');
+  $('#final-coins').textContent = String(coinsCollected);
+  $('#lifetime-coins').textContent = String(lifetimeCoins);
+  $('#runs-played').textContent = String(runsPlayed);
 }
 function steer(direction: -1 | 1) {
   if (state === 'playing') targetLane = Math.max(-1, Math.min(1, targetLane + direction)) as Lane;
@@ -426,7 +459,7 @@ function update(dt: number) {
     if (entity.kind === 'car' || entity.kind === 'truck') entity.group.position.x = laneX(entity.lane) + Math.sin(elapsed * 1.4 + i) * 0.035;
     const collisionZone = entity.z > 0.55 && entity.z < 5.2;
     entity.group.position.x = roadCurve(entity.z - distance * 0.95) + laneX(entity.lane) + (entity.kind === 'car' || entity.kind === 'truck' ? Math.sin(elapsed * 1.4 + i) * 0.035 : 0);
-    const overlaps = Math.abs(entity.group.position.x - player.position.x) < (entity.kind === 'cone' ? 0.95 : 1.42);
+    const overlaps = Math.abs(entity.group.position.x - player.position.x) < (entity.kind === 'cone' || entity.kind === 'oil' ? 0.95 : entity.kind === 'tires' ? 1.15 : 1.42);
     if (collisionZone && overlaps) { crash(); break; }
     if (!entity.passed && entity.z > 5.2) { entity.passed = true; score += entity.kind === 'car' || entity.kind === 'truck' ? 100 : 150; }
     if (entity.z > 15) { scene.remove(entity.group); entities.splice(i, 1); }
@@ -440,6 +473,9 @@ function update(dt: number) {
     coin.group.position.y = 1.15 + Math.sin(elapsed * 5 + i * 0.6) * 0.08;
     if (Math.abs(coin.z - player.position.z) < 1.35 && Math.abs(coin.group.position.x - player.position.x) < 1.12) {
       coinsCollected += 1;
+      lifetimeCoins += 1;
+      try { localStorage.setItem('neon-drive-coins', String(lifetimeCoins)); } catch { /* Keep collecting if storage is unavailable. */ }
+      $('#lifetime-coins').textContent = String(lifetimeCoins);
       score += 250;
       scene.remove(coin.group);
       coins.splice(i, 1);
