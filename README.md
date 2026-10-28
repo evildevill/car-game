@@ -7,7 +7,7 @@ A browser-based arcade driving game built with Three.js, WebGL, TypeScript, and 
 - Real-time 3D scene with lighting, fog, shadows, road markings, city buildings, glowing windows, and streetlights.
 - Three-lane driving with smooth steering and car body roll.
 - Traffic cars, trucks, road barriers, and cones with collision detection.
-- Gentle default cruising speed, hold-to-boost acceleration, and reliable Space/S/down braking.
+- Fast arcade-style default speed, boost acceleration, and reliable Space/S/down braking.
 - Procedurally curving zig-zag road with road-aligned lane markings and scenery.
 - Golden coin trails with collection effects, bonus points, and a live coin counter.
 - Score, distance, speed meter, saved best score, increasing difficulty, pause, and restart.
@@ -36,7 +36,7 @@ npm run dev
 ## Controls
 
 - **A / D** or **Left / Right arrows** — change lanes
-- **W / Up arrow** — boost
+- **W / Up arrow** — boost (raises speed above the default cruise)
 - **Space / S / Down arrow** — brake
 - **P** or **Escape** — pause/resume
 - **Enter** — start or restart
