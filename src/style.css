@@ -8,3 +8,11 @@
 @media(max-width:760px){.hud{flex-wrap:wrap;max-width:calc(100% - 24px)}.coin-card{min-width:72px!important}.mobile-controls{bottom:50px}.mobile-action-stack{gap:6px}}
 
 /* Road readability: stronger asphalt/marking contrast and keep the scene itself unobscured. */
+
+
+/* Real-world street dressing and the timed coin-magnet pickup. */
+.magnet-card{border-top:2px solid #6fd8ff;min-width:105px}
+.magnet-card strong{color:#6fd8ff;font-size:24px}
+.magnet-card.active{background:linear-gradient(135deg,rgba(24,73,91,.9),rgba(9,15,23,.9));border-color:#6fd8ff;box-shadow:0 0 22px #39c8ff24}
+.magnet-card.active strong{color:#d9f8ff;text-shadow:0 0 12px #42caff8c}
+@media(max-width:760px){.magnet-card{min-width:78px!important}.magnet-card strong{font-size:20px}}
