@@ -299,6 +299,9 @@ function updateHud() {
   speedEl.textContent = Math.round(speed).toString();
   meter.style.width = Math.min(100, Math.max(0, (speed - 80) / 1.2)) + '%';
   coinsEl.textContent = lifetimeCoins.toString().padStart(3, '0');
+  $('#best-score').textContent = bestScore.toString().padStart(6, '0');
+  $('#lifetime-coins').textContent = String(lifetimeCoins);
+  $('#runs-played').textContent = String(runsPlayed);
 }
 function clearEntities() {
   for (const entity of entities) scene.remove(entity.group);
