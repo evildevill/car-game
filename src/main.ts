@@ -14,7 +14,7 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 18
 camera.position.set(0, 5.3, 10.5);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -101,19 +101,21 @@ function makeCar(color: string, playerCar = false, truck = false): THREE.Group {
 const laneX = (lane: Lane) => lane * 3.15;
 const road = new THREE.Group();
 scene.add(road);
-box(road, roadMat, [0, -0.14, -48], [10.4, 0.28, 115], false);
-box(road, curbMat, [-5.35, -0.08, -48], [0.34, 0.22, 115], false);
-box(road, curbMat, [5.35, -0.08, -48], [0.34, 0.22, 115], false);
-box(road, grassMat, [-14, -0.25, -48], [17, 0.15, 125], false);
-box(road, grassMat, [14, -0.25, -48], [17, 0.15, 125], false);
-
-const laneMarkers: THREE.Mesh[] = [];
-for (let z = -106; z < 10; z += 6) {
-  for (const x of [-1.73, 1.73]) laneMarkers.push(box(road, stripeMat, [x, 0.015, z], [0.075, 0.025, 2.6], false));
-  box(road, curbMat, [-5.17, 0.02, z], [0.035, 0.025, 2.6], false);
-  box(road, curbMat, [5.17, 0.02, z], [0.035, 0.025, 2.6], false);
+const roadChunks: THREE.Group[] = [];
+const roadChunkLength = 6;
+for (let z = -108; z <= 12; z += roadChunkLength) {
+  const chunk = new THREE.Group();
+  box(chunk, roadMat, [0, -0.14, 0], [10.4, 0.28, roadChunkLength + 0.08], false);
+  for (const side of [-1, 1]) {
+    box(chunk, curbMat, [side * 5.35, -0.08, 0], [0.34, 0.22, roadChunkLength + 0.08], false);
+    box(chunk, new THREE.MeshStandardMaterial({ color: '#b8f34d', emissive: '#7da52b', emissiveIntensity: 0.35, roughness: 0.65 }), [side * 5.18, 0.025, 0], [0.035, 0.025, roadChunkLength + 0.08], false);
+  }
+  for (const x of [-1.73, 1.73]) box(chunk, stripeMat, [x, 0.015, 0], [0.075, 0.025, 2.65], false);
+  road.add(chunk);
+  roadChunks.push(chunk);
 }
-
+const roadCurve = (z: number) =>
+  2.15 * Math.sin(z / 27) + 1.05 * Math.sin(z / 13.5) + 0.35 * Math.sin(z / 7.5);
 const buildingMaterials = ['#344351', '#46505c', '#3b4653', '#56616b', '#303c4a'].map(c => material(c, 0.92));
 const windowMaterials = [
   new THREE.MeshStandardMaterial({ color: '#9fe4ff', emissive: '#4ca8d6', emissiveIntensity: 0.65, roughness: 0.35 }),
@@ -139,6 +141,8 @@ for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
     box(g, wm, [wx, wy, depth / 2 + 0.008], [width / cols * 0.42, 0.22, 0.018], false);
   }
   g.position.set(x, 0, z);
+  g.userData.side = side;
+  g.userData.baseOffset = Math.abs(x);
   scene.add(g);
   buildings.push(g);
 }
@@ -187,9 +191,10 @@ function makeHazard(kind: HazardKind): THREE.Group {
 let state: GameState = 'ready';
 let targetLane: Lane = 0;
 let lanePosition = 0;
-let distance = 0, score = 0, speed = 120, difficulty = 1, spawnTimer = 0.7, elapsed = 0, crashCooldown = 0;
+let distance = 0, score = 0, speed = 0, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
 let bestScore = Number(localStorage.getItem('neon-drive-best') || 0);
 let boostHeld = false;
+let brakeHeld = false;
 const keys = new Set<string>();
 const startScreen = $('#start-screen');
 const pauseScreen = $('#pause-screen');
@@ -197,6 +202,7 @@ const overScreen = $('#gameover-screen');
 const distanceEl = $('#distance');
 const scoreEl = $('#score');
 const speedEl = $('#speed');
+const coinsEl = $('#coins');
 const meter = $('#speed-meter-fill');
 const engineStatus = $('#engine-status');
 const flash = $('#crash-flash');
@@ -212,14 +218,17 @@ function updateHud() {
   distanceEl.textContent = Math.floor(distance).toString().padStart(4, '0');
   scoreEl.textContent = Math.floor(score).toString().padStart(6, '0');
   speedEl.textContent = Math.round(speed).toString();
-  meter.style.width = Math.min(100, Math.max(0, (speed - 80) / 1.2)) + '%';
+  meter.style.width = Math.min(100, Math.max(0, speed / 1.15)) + '%';
+  coinsEl.textContent = coinsCollected.toString().padStart(3, '0');
 }
 function clearEntities() {
   for (const entity of entities) scene.remove(entity.group);
   entities.length = 0;
+  for (const coin of coins) scene.remove(coin.group);
+  coins.length = 0;
 }
 function resetGame() {
-  clearEntities(); distance = 0; score = 0; speed = 120; difficulty = 1; spawnTimer = 0.65;
+  clearEntities(); distance = 0; score = 0; speed = 0; difficulty = 1; spawnTimer = 1.1; coinSpawnTimer = 0.8; coinsCollected = 0; brakeHeld = false; boostHeld = false;
   targetLane = 0; lanePosition = 0; elapsed = 0; crashCooldown = 0;
   player.position.set(0, 0.02, 2.8); player.rotation.set(0, 0, 0);
   updateHud(); setState('playing');
@@ -238,6 +247,33 @@ function spawnEntity() {
     const second = makeHazard(secondKind);
     second.position.set(laneX(secondLane), 0, -105); scene.add(second);
     entities.push({ group: second, kind: secondKind, lane: secondLane, z: -105, passed: false });
+  }
+}
+interface Coin { group: THREE.Group; lane: Lane; z: number; collected: boolean }
+const coins: Coin[] = [];
+const coinMaterial = new THREE.MeshStandardMaterial({ color: '#ffd75a', metalness: 0.78, roughness: 0.22, emissive: '#b77812', emissiveIntensity: 0.7 });
+const coinEdgeMaterial = new THREE.MeshStandardMaterial({ color: '#fff0a6', metalness: 0.72, roughness: 0.2, emissive: '#ffba2e', emissiveIntensity: 1.1 });
+function makeCoin(): THREE.Group {
+  const group = new THREE.Group();
+  const disk = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.09, 24), coinMaterial);
+  disk.rotation.x = Math.PI / 2;
+  disk.castShadow = true;
+  group.add(disk);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.255, 0.045, 8, 24), coinEdgeMaterial);
+  group.add(ring);
+  const center = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), coinEdgeMaterial);
+  center.position.z = 0.055;
+  group.add(center);
+  return group;
+}
+function spawnCoins() {
+  const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
+  for (let i = 0; i < 5; i++) {
+    const group = makeCoin();
+    const z = -72 - i * 2.5;
+    group.position.set(roadCurve(z - distance * 0.95) + laneX(lane), 1.15, z);
+    scene.add(group);
+    coins.push({ group, lane, z, collected: false });
   }
 }
 function crash() {
@@ -268,10 +304,10 @@ window.addEventListener('keydown', event => {
   if (key === 'arrowright' || key === 'd') steer(1);
   if (key === 'p' || key === 'escape') togglePause();
   if (key === 'enter' && (state === 'ready' || state === 'over')) resetGame();
-  if ((key === ' ' || key === 'w' || key === 'arrowup') && state === 'ready') resetGame();
+  if ((key === 'w' || key === 'arrowup') && state === 'ready') resetGame();
 });
 window.addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
-window.addEventListener('blur', () => { keys.clear(); boostHeld = false; if (state === 'playing') setState('paused'); });
+window.addEventListener('blur', () => { keys.clear(); boostHeld = false; brakeHeld = false; if (state === 'playing') setState('paused'); });
 $('#start-button').addEventListener('click', resetGame);
 $('#resume-button').addEventListener('click', () => setState('playing'));
 $('#restart-button').addEventListener('click', resetGame);
@@ -286,47 +322,83 @@ function bindHold(id: string, start: () => void, end: () => void) {
 bindHold('#left-button', () => steer(-1), () => {});
 bindHold('#right-button', () => steer(1), () => {});
 bindHold('#boost-button', () => { boostHeld = true; }, () => { boostHeld = false; });
+bindHold('#brake-button', () => { brakeHeld = true; }, () => { brakeHeld = false; });
 
 function update(dt: number) {
   elapsed += dt;
   const boost = boostHeld || keys.has('w') || keys.has('arrowup');
-  const braking = keys.has('s') || keys.has('arrowdown');
-  speed = THREE.MathUtils.damp(speed, braking ? 82 : boost ? 205 : 120 + Math.min(48, difficulty * 5), 1.8, dt);
-  const travel = speed / 3.6 * dt;
+  const braking = brakeHeld || keys.has(' ') || keys.has('s') || keys.has('arrowdown');
+  // A gentle cruise by default; acceleration is deliberately reserved for the boost key.
+  const targetSpeed = braking ? 0 : boost ? 112 : 22 + Math.min(8, difficulty * 0.8);
+  speed = THREE.MathUtils.damp(speed, targetSpeed, braking ? 7.5 : boost ? 1.45 : 0.95, dt);
+  const travel = speed / 3.6 * dt * 0.72;
   distance += travel * 0.95; score += travel * 10; difficulty = 1 + distance / 280;
   spawnTimer -= dt;
-  if (spawnTimer <= 0) { spawnEntity(); spawnTimer = Math.max(0.58, 1.48 - difficulty * 0.12) + Math.random() * 0.45; }
+  if (spawnTimer <= 0) { spawnEntity(); spawnTimer = Math.max(0.78, 1.7 - difficulty * 0.1) + Math.random() * 0.5; }
+  coinSpawnTimer -= dt;
+  if (coinSpawnTimer <= 0) { spawnCoins(); coinSpawnTimer = 3.8 + Math.random() * 2.2; }
 
+  const currentRoadCenter = roadCurve(2.8 - distance * 0.95);
   const targetX = laneX(targetLane);
   lanePosition = THREE.MathUtils.damp(lanePosition, targetX, 8.5, dt);
-  player.position.x = lanePosition;
+  player.position.x = currentRoadCenter + lanePosition;
   player.position.y = 0.02 + Math.sin(elapsed * 16) * 0.012 * (speed / 120);
   player.rotation.z = THREE.MathUtils.clamp((targetX - lanePosition) * -0.045, -0.12, 0.12);
   player.rotation.y = THREE.MathUtils.clamp((lanePosition - targetX) * 0.045, -0.12, 0.12);
 
-  for (const marker of laneMarkers) { marker.position.z += travel; if (marker.position.z > 8) marker.position.z -= 114; }
-  for (const light of streetlights) { light.position.z += travel; if (light.position.z > 12) light.position.z -= 118; }
-  for (const building of buildings) { building.position.z += travel * 0.72; if (building.position.z > 16) building.position.z -= 180; }
+  for (const chunk of roadChunks) {
+    chunk.position.z += travel;
+    if (chunk.position.z > 15) chunk.position.z -= 126;
+    chunk.position.x = roadCurve(chunk.position.z - distance * 0.95);
+  }
+  for (const light of streetlights) {
+    light.position.z += travel;
+    if (light.position.z > 12) light.position.z -= 118;
+    light.position.x = Math.sign(light.position.x || 1) * 6.25 + roadCurve(light.position.z - distance * 0.95) * 0.92;
+  }
+  for (const building of buildings) {
+    building.position.z += travel * 0.72;
+    if (building.position.z > 16) building.position.z -= 180;
+    const side = building.userData.side as number;
+    building.position.x = side * (Number(building.userData.baseOffset) || 10) + roadCurve(building.position.z - distance * 0.95) * 0.5;
+  }
 
   for (let i = entities.length - 1; i >= 0; i--) {
     const entity = entities[i];
     entity.z += travel; entity.group.position.z = entity.z;
     if (entity.kind === 'car' || entity.kind === 'truck') entity.group.position.x = laneX(entity.lane) + Math.sin(elapsed * 1.4 + i) * 0.035;
     const collisionZone = entity.z > 0.55 && entity.z < 5.2;
+    entity.group.position.x = roadCurve(entity.z - distance * 0.95) + laneX(entity.lane) + (entity.kind === 'car' || entity.kind === 'truck' ? Math.sin(elapsed * 1.4 + i) * 0.035 : 0);
     const overlaps = Math.abs(entity.group.position.x - player.position.x) < (entity.kind === 'cone' ? 0.95 : 1.42);
     if (collisionZone && overlaps) { crash(); break; }
     if (!entity.passed && entity.z > 5.2) { entity.passed = true; score += entity.kind === 'car' || entity.kind === 'truck' ? 100 : 150; }
     if (entity.z > 15) { scene.remove(entity.group); entities.splice(i, 1); }
+  }
+  for (let i = coins.length - 1; i >= 0; i--) {
+    const coin = coins[i];
+    coin.z += travel;
+    coin.group.position.z = coin.z;
+    coin.group.position.x = roadCurve(coin.z - distance * 0.95) + laneX(coin.lane);
+    coin.group.rotation.y += dt * 2.8;
+    coin.group.position.y = 1.15 + Math.sin(elapsed * 5 + i * 0.6) * 0.08;
+    if (Math.abs(coin.z - player.position.z) < 1.35 && Math.abs(coin.group.position.x - player.position.x) < 1.12) {
+      coinsCollected += 1;
+      score += 250;
+      scene.remove(coin.group);
+      coins.splice(i, 1);
+      continue;
+    }
+    if (coin.z > 14) { scene.remove(coin.group); coins.splice(i, 1); }
   }
   crashCooldown = Math.max(0, crashCooldown - dt);
   updateHud();
 }
 
 function updateCamera(dt: number) {
-  const desired = new THREE.Vector3(player.position.x * 0.36, 5.3, 10.5);
+  const roadCameraOffset = roadCurve(2.8 - distance * 0.95) * 0.3 + (boostHeld ? Math.sin(elapsed * 26) * 0.018 : 0);
+  const desired = new THREE.Vector3(player.position.x * 0.36 + roadCameraOffset, 5.3, 10.5);
   camera.position.lerp(desired, 1 - Math.exp(-2.5 * dt));
   camera.lookAt(player.position.x * 0.23, 0.7, -8.5);
-  if (boostHeld) camera.position.x += Math.sin(elapsed * 26) * 0.018;
 }
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
