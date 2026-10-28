@@ -205,7 +205,7 @@ for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
   for (let row = 1; row < rows; row++) for (let col = 0; col < cols; col++) {
     if (Math.random() < 0.16) continue;
     const wx = -width / 2 + (col + 0.5) * width / cols;
-    const wy = -height / 2 + row * height / rows;
+    const wy = row * height / rows - 0.15;
     const wm = windowMaterials[Math.random() > 0.72 ? 1 : Math.random() > 0.22 ? 0 : 2];
     box(g, wm, [wx, wy, depth / 2 + 0.008], [width / cols * 0.42, 0.22, 0.018], false);
     if (row % 2 === 0 && col % 2 === 0) box(g, trimMaterial, [wx, wy - 0.14, depth / 2 + 0.025], [width / cols * 0.5, 0.035, 0.045], false);
@@ -215,7 +215,7 @@ for (const side of [-1, 1]) for (let i = 0; i < 24; i++) {
     if (Math.random() < 0.12) continue;
     const count = Math.max(2, Math.floor(depth / 0.8));
     const wz = -depth / 2 + (col + 0.5) * depth / count;
-    const wy = -height / 2 + row * height / streetRows;
+    const wy = row * height / streetRows - 0.15;
     box(g, windowMaterials[Math.random() > 0.65 ? 1 : Math.random() > 0.2 ? 0 : 2], [streetX, wy, wz], [0.025, 0.24, 0.36], false);
   }
   if (facadeStyle === 0 || height < 5.5) {
@@ -445,12 +445,12 @@ function makeMagnetPickup(): THREE.Group {
   const group = new THREE.Group();
   const red = new THREE.MeshStandardMaterial({ color: '#ff4f61', emissive: '#b7193c', emissiveIntensity: 1.15, metalness: 0.22, roughness: 0.28 });
   const blue = new THREE.MeshStandardMaterial({ color: '#55c8ff', emissive: '#117fc7', emissiveIntensity: 1.1, metalness: 0.28, roughness: 0.25 });
-  const arc = new THREE.TorusGeometry(0.43, 0.13, 12, 24, Math.PI * 1.5);
-  const magnetRed = new THREE.Mesh(arc, red); magnetRed.rotation.z = Math.PI * 0.25; group.add(magnetRed);
-  const magnetBlue = new THREE.Mesh(arc, blue); magnetBlue.rotation.z = Math.PI * 1.25; group.add(magnetBlue);
-  for (const x of [-0.31, 0.31]) {
+  const arc = new THREE.TorusGeometry(0.43, 0.13, 12, 16, Math.PI / 2);
+  const magnetRed = new THREE.Mesh(arc, red); group.add(magnetRed);
+  const magnetBlue = new THREE.Mesh(arc, blue); magnetBlue.rotation.z = Math.PI / 2; group.add(magnetBlue);
+  for (const x of [-0.43, 0.43]) {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.17, 0.22), x < 0 ? red : blue);
-    cap.position.set(x, -0.22, 0); group.add(cap);
+    cap.position.set(x, 0, 0); group.add(cap);
   }
   const halo = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.025, 6, 32), new THREE.MeshBasicMaterial({ color: '#a9f2ff' }));
   halo.rotation.x = 0.2; group.add(halo);
