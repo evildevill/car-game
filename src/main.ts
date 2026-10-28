@@ -347,7 +347,7 @@ function makeHazard(kind: HazardKind): THREE.Group {
 let state: GameState = 'ready';
 let targetLane: Lane = 0;
 let lanePosition = 0;
-let distance = 0, score = 0, speed = 120, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
+let distance = 0, score = 0, speed = 120, difficulty = 1, spawnTimer = 0.9, coinSpawnTimer = 1.2, magnetSpawnTimer = 9, magnetTimer = 0, elapsed = 0, crashCooldown = 0, coinsCollected = 0;
 const readSavedNumber = (key: string) => {
   try { const value = Number(localStorage.getItem(key) || 0); return Number.isFinite(value) && value >= 0 ? value : 0; }
   catch { return 0; }
@@ -385,15 +385,19 @@ function updateHud() {
   $('#best-score').textContent = bestScore.toString().padStart(6, '0');
   $('#lifetime-coins').textContent = String(lifetimeCoins);
   $('#runs-played').textContent = String(runsPlayed);
+  $('#magnet-timer').textContent = magnetTimer > 0 ? `${Math.ceil(magnetTimer)}s` : 'OFF';
+  $('#magnet-card').classList.toggle('active', magnetTimer > 0);
 }
 function clearEntities() {
   for (const entity of entities) scene.remove(entity.group);
   entities.length = 0;
   for (const coin of coins) scene.remove(coin.group);
   coins.length = 0;
+  for (const powerup of powerups) scene.remove(powerup.group);
+  powerups.length = 0;
 }
 function resetGame() {
-  clearEntities(); distance = 0; score = 0; speed = 120; difficulty = 1; spawnTimer = 0.9; coinSpawnTimer = 1.2; coinsCollected = 0; brakeHeld = false; boostHeld = false;
+  clearEntities(); distance = 0; score = 0; speed = 120; difficulty = 1; spawnTimer = 0.9; coinSpawnTimer = 1.2; magnetSpawnTimer = 9; magnetTimer = 0; coinsCollected = 0; brakeHeld = false; boostHeld = false;
   runsPlayed += 1;
   try { localStorage.setItem('neon-drive-runs', String(runsPlayed)); } catch { /* Keep the game playable when storage is unavailable. */ }
   $('#runs-played').textContent = String(runsPlayed);
@@ -420,6 +424,8 @@ function spawnEntity() {
 }
 interface Coin { group: THREE.Group; lane: Lane; z: number; collected: boolean }
 const coins: Coin[] = [];
+interface PowerUp { group: THREE.Group; lane: Lane; z: number }
+const powerups: PowerUp[] = [];
 const coinMaterial = new THREE.MeshStandardMaterial({ color: '#ffd75a', metalness: 0.78, roughness: 0.22, emissive: '#b77812', emissiveIntensity: 0.7 });
 const coinEdgeMaterial = new THREE.MeshStandardMaterial({ color: '#fff0a6', metalness: 0.72, roughness: 0.2, emissive: '#ffba2e', emissiveIntensity: 1.1 });
 function makeCoin(): THREE.Group {
@@ -434,6 +440,27 @@ function makeCoin(): THREE.Group {
   center.position.z = 0.055;
   group.add(center);
   return group;
+}
+function makeMagnetPickup(): THREE.Group {
+  const group = new THREE.Group();
+  const red = new THREE.MeshStandardMaterial({ color: '#ff4f61', emissive: '#b7193c', emissiveIntensity: 1.15, metalness: 0.22, roughness: 0.28 });
+  const blue = new THREE.MeshStandardMaterial({ color: '#55c8ff', emissive: '#117fc7', emissiveIntensity: 1.1, metalness: 0.28, roughness: 0.25 });
+  const arc = new THREE.TorusGeometry(0.43, 0.13, 12, 24, Math.PI * 1.5);
+  const magnetRed = new THREE.Mesh(arc, red); magnetRed.rotation.z = Math.PI * 0.25; group.add(magnetRed);
+  const magnetBlue = new THREE.Mesh(arc, blue); magnetBlue.rotation.z = Math.PI * 1.25; group.add(magnetBlue);
+  for (const x of [-0.31, 0.31]) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.17, 0.22), x < 0 ? red : blue);
+    cap.position.set(x, -0.22, 0); group.add(cap);
+  }
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.025, 6, 32), new THREE.MeshBasicMaterial({ color: '#a9f2ff' }));
+  halo.rotation.x = 0.2; group.add(halo);
+  return group;
+}
+function spawnMagnet() {
+  const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
+  const group = makeMagnetPickup();
+  group.position.set(laneX(lane), 1.45, -86);
+  scene.add(group); powerups.push({ group, lane, z: -86 });
 }
 function spawnCoins() {
   const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
@@ -509,6 +536,9 @@ function update(dt: number) {
   if (spawnTimer <= 0) { spawnEntity(); spawnTimer = Math.max(0.78, 1.7 - difficulty * 0.1) + Math.random() * 0.5; }
   coinSpawnTimer -= dt;
   if (coinSpawnTimer <= 0) { spawnCoins(); coinSpawnTimer = 3.8 + Math.random() * 2.2; }
+  magnetSpawnTimer -= dt;
+  if (magnetSpawnTimer <= 0) { spawnMagnet(); magnetSpawnTimer = 17 + Math.random() * 10; }
+  magnetTimer = Math.max(0, magnetTimer - dt);
 
   const currentRoadCenter = roadCurve(2.8 - distance * 0.95);
   const targetX = laneX(targetLane);
@@ -555,14 +585,34 @@ function update(dt: number) {
     if (!entity.passed && entity.z > 5.2) { entity.passed = true; score += entity.kind === 'car' || entity.kind === 'truck' ? 100 : 150; }
     if (entity.z > 15) { scene.remove(entity.group); entities.splice(i, 1); }
   }
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    const powerup = powerups[i];
+    powerup.z += travel;
+    powerup.group.position.z = powerup.z;
+    powerup.group.position.y = 1.45 + Math.sin(elapsed * 4 + i) * 0.13;
+    powerup.group.rotation.y += dt * 1.6;
+    powerup.group.position.x = laneX(powerup.lane);
+    if (Math.abs(powerup.z - player.position.z) < 1.7 && Math.abs(powerup.group.position.x - player.position.x) < 1.35) {
+      magnetTimer = 30;
+      scene.remove(powerup.group); powerups.splice(i, 1);
+      $('#magnet-card').classList.add('active');
+      $('#magnet-timer').textContent = '30s';
+      continue;
+    }
+    if (powerup.z > 14) { scene.remove(powerup.group); powerups.splice(i, 1); }
+  }
   for (let i = coins.length - 1; i >= 0; i--) {
     const coin = coins[i];
     coin.z += travel;
     coin.group.position.z = coin.z;
-    coin.group.position.x = roadCurve(coin.z - distance * 0.95) + laneX(coin.lane);
+    const normalCoinX = roadCurve(coin.z - distance * 0.95) + laneX(coin.lane);
+    if (magnetTimer > 0 && coin.z > -42) {
+      coin.group.position.x = THREE.MathUtils.damp(coin.group.position.x, player.position.x, 4.2, dt);
+    } else coin.group.position.x = normalCoinX;
     coin.group.rotation.y += dt * 2.8;
     coin.group.position.y = 1.15 + Math.sin(elapsed * 5 + i * 0.6) * 0.08;
-    if (Math.abs(coin.z - player.position.z) < 1.35 && Math.abs(coin.group.position.x - player.position.x) < 1.12) {
+    const magnetRange = magnetTimer > 0;
+    if (Math.abs(coin.z - player.position.z) < (magnetRange ? 5.8 : 1.35) && Math.abs(coin.group.position.x - player.position.x) < (magnetRange ? 2.35 : 1.12)) {
       coinsCollected += 1;
       lifetimeCoins += 1;
       try { localStorage.setItem('neon-drive-coins', String(lifetimeCoins)); } catch { /* Keep collecting if storage is unavailable. */ }
@@ -575,6 +625,8 @@ function update(dt: number) {
     if (coin.z > 14) { scene.remove(coin.group); coins.splice(i, 1); }
   }
   crashCooldown = Math.max(0, crashCooldown - dt);
+  $('#magnet-timer').textContent = magnetTimer > 0 ? `${Math.ceil(magnetTimer)}s` : 'OFF';
+  $('#magnet-card').classList.toggle('active', magnetTimer > 0);
   updateHud();
 }
 
